@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BitBot Simulator</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <div class="eyebrow">BitBot</div>
+          <h1>Simulator</h1>
+        </div>
+        <div class="header-actions">
+          <button id="btnReset">Reset</button>
+          <button id="btnRun" class="primary">Run sample</button>
+        </div>
+      </header>
+
+      <main class="layout">
+        <section class="panel simulation-panel">
+          <div class="hud">
+            <div><span>Speed</span><strong id="speedReadout">0</strong></div>
+            <div><span>Heading</span><strong id="headingReadout">0°</strong></div>
+            <div><span>Distance</span><strong id="distanceReadout">0 cm</strong></div>
+          </div>
+
+          <div class="arena-wrap">
+            <canvas id="arena" width="520" height="520" aria-label="BitBot arena"></canvas>
+          </div>
+
+          <div class="controls-grid">
+            <button data-command="forward">Forward</button>
+            <button data-command="left">Left</button>
+            <button data-command="right">Right</button>
+            <button data-command="reverse">Reverse</button>
+            <button data-command="brake" class="warn">Brake</button>
+            <button data-command="coast">Coast</button>
+          </div>
+        </section>
+
+        <aside class="panel code-panel">
+          <div class="code-header">
+            <h2>Sample MakeCode</h2>
+            <button id="btnLoadDemo">Load demo</button>
+          </div>
+          <textarea id="codeEditor" spellcheck="false">(async () => {
+  bitbot.go(BBDirection.Forward, 60);
+  await basic.pause(1000);
+  bitbot.rotate(BBRobotDirection.Left, 45);
+  await basic.pause(700);
+  bitbot.stop(BBStopMode.Brake);
+})();</textarea>
+        </aside>
+      </main>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
