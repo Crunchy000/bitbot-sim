@@ -10,7 +10,9 @@
   },
   "files": [
     "README.md",
-    "main.ts"
+    "main.ts",
+    "sim/bitbot.ts",
+    "sim/package.json"
   ],
   "testFiles": [
     "test.ts"
