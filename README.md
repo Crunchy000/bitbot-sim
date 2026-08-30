@@ -51,13 +51,11 @@ bitbot.stop(BBStopMode.Brake)
 3. Choose Import and use the GitHub repository URL.
 4. Use the block-based BitBot API from [main.ts](main.ts).
 
-## Custom MakeCode simulator
-
-This repo now includes a custom simulator scaffold in [sim/bitbot.ts](sim/bitbot.ts). That is the runtime layer MakeCode uses when an extension wants to render a rover-like custom board instead of the default micro:bit silhouette.
-
-This is the part needed for a rover-like visual simulation in the MakeCode simulator, although full visual rendering still depends on the final extension build and compilation flow in the MakeCode environment.
-
 ## Notes
+
+- The browser simulator is a local HTML tool for visual testing, separate from the MakeCode package import.
+- The MakeCode extension itself is intentionally minimal so it imports cleanly.
+- The package can be expanded later with more BitBot blocks and simulator support.
 
 - The simulator is intentionally focused on motion and orientation.
 - It is a good base for adding line sensors, range sensing, LEDs, and obstacle detection.
