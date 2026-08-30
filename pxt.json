@@ -11,8 +11,8 @@
   "files": [
     "README.md",
     "main.ts",
-    "sim/*.ts",
-    "sim/*.svg",
+    "sim/bitbot.ts",
+    "sim/README.md",
     "simulator/README.md"
   ],
   "testFiles": [
