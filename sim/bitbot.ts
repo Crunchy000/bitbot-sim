@@ -1,3 +1,8 @@
+declare class BaseBoard {
+    constructor();
+    init(): void;
+}
+
 namespace pxsim {
     export interface BitBotSimState {
         left: number;
