@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>BitBot Simulator</title>
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.css?v=makecode-embed-2" />
   </head>
   <body>
     <div class="app-shell">
@@ -14,8 +14,10 @@
           <h1>Simulator</h1>
         </div>
         <div class="header-actions">
+          <label class="maze-seed" for="mazeSeed">Seed <input id="mazeSeed" type="number" value="35" min="0" step="1" /></label>
           <button id="btnReset">Reset</button>
-          <button id="btnRun" class="primary">Run sample</button>
+          <button id="btnStop">Stop</button>
+          <button id="btnRun" class="primary">Start</button>
         </div>
       </header>
 
@@ -25,38 +27,82 @@
             <div><span>Speed</span><strong id="speedReadout">0</strong></div>
             <div><span>Heading</span><strong id="headingReadout">0°</strong></div>
             <div><span>Distance</span><strong id="distanceReadout">0 cm</strong></div>
+            <div><span>Line Sensors</span><strong id="lineReadout">0 / 0</strong></div>
+            <div><span>Challenge</span><strong id="challengeReadout">Ready</strong></div>
+            <div class="led-readout"><span>LED display</span><div id="ledGrid" class="led-grid" role="img" aria-label="5 by 5 LED display"></div></div>
           </div>
 
           <div class="arena-wrap">
             <canvas id="arena" width="520" height="520" aria-label="BitBot arena"></canvas>
           </div>
-
-          <div class="controls-grid">
-            <button data-command="forward">Forward</button>
-            <button data-command="left">Left</button>
-            <button data-command="right">Right</button>
-            <button data-command="reverse">Reverse</button>
-            <button data-command="brake" class="warn">Brake</button>
-            <button data-command="coast">Coast</button>
-          </div>
+          <label class="speed-control" for="simulationSpeed">
+            <span>Simulation speed</span>
+            <input id="simulationSpeed" type="range" min="25" max="200" value="100" step="25" />
+            <output id="simulationSpeedValue" for="simulationSpeed">1x</output>
+          </label>
         </section>
 
         <aside class="panel code-panel">
           <div class="code-header">
-            <h2>Sample MakeCode</h2>
-            <button id="btnLoadDemo">Load demo</button>
+            <h2>Maze Program</h2>
           </div>
-          <textarea id="codeEditor" spellcheck="false">(async () => {
-  bitbot.go(BBDirection.Forward, 60);
-  await basic.pause(1000);
-  bitbot.rotate(BBRobotDirection.Left, 45);
-  await basic.pause(700);
-  bitbot.stop(BBStopMode.Brake);
-})();</textarea>
+          <div class="published-project-import">
+            <input id="publishedProjectUrl" type="url" placeholder="Paste a MakeCode share link" aria-label="MakeCode published project link" />
+            <button id="btnLoadPublishedProject" type="button">Load</button>
+          </div>
+          <p id="hexImportStatus" class="import-status" aria-live="polite"></p>
+          <div class="source-editor">
+            <pre id="codeHighlight" aria-hidden="true"></pre>
+            <textarea id="codeEditor" spellcheck="false">basic.showString("Hi")
+
+basic.forever(async function () {
+  let left = bitbot.readLine(BBLineSensor.Left)
+  let right = bitbot.readLine(BBLineSensor.Right)
+  let distanceCm = bitbot.sonar(BBPingUnit.Centimeters)
+
+  debug.log(`line L:${left} R:${right} sonar:${distanceCm}cm`)
+
+  if (distanceCm < 15 || (left == 0 && right == 0)) {
+    // Wall hit: stop, beep, and turn away in a random direction long enough to clear it.
+    basic.showIcon(IconNames.No)
+    bitbot.stop(BBStopMode.Brake)
+    await bitbot.buzzTime(150)
+    let turnDirection = Math.random() < 0.5 ? BBRobotDirection.Left : BBRobotDirection.Right
+    bitbot.rotate(turnDirection, 40)
+    await basic.pause(300)
+  } else if (left == 0) {
+    // Left sensor on the tape: veer right.
+    basic.showArrow(ArrowNames.NorthEast)
+    bitbot.motor(BBMotor.Left, 35)
+    bitbot.motor(BBMotor.Right, 15)
+  } else if (right == 0) {
+    // Right sensor on the tape: veer left.
+    basic.showArrow(ArrowNames.NorthWest)
+    bitbot.motor(BBMotor.Left, 15)
+    bitbot.motor(BBMotor.Right, 35)
+  } else {
+    // Clear floor ahead: drive straight.
+    basic.showArrow(ArrowNames.North)
+    bitbot.go(BBDirection.Forward, 35)
+  }
+
+  await basic.pause(50)
+})</textarea>
+          </div>
+          <div class="debug-header">
+            <h2>Activity Log</h2>
+            <div class="debug-actions">
+              <button id="btnCopyDebug" type="button">Copy</button>
+            </div>
+          </div>
+          <textarea id="debugReadout" class="debug-readout" aria-label="Simulator activity log" readonly></textarea>
         </aside>
       </main>
     </div>
 
-    <script src="app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lzma@2.3.2/src/lzma_worker-min.js"></script>
+    <script src="maze-generator.js"></script>
+    <script src="navigation-algorithm.js"></script>
+    <script src="app.js?v=navigation-module-1"></script>
   </body>
 </html>
