@@ -86,6 +86,19 @@ const BBLineSensor = {
   Right: 1
 };
 
+const BBPLineSensor = {
+  Left: 0,
+  Right: 1,
+  Centre: 2
+};
+
+const BBArcDirection = {
+  ForwardLeft: 0,
+  ForwardRight: 1,
+  ReverseLeft: 2,
+  ReverseRight: 3
+};
+
 const BBLightSensor = {
   Left: 0,
   Right: 1
@@ -230,6 +243,67 @@ function showLedCharacter(value) {
   showLedPattern(characterPatterns[character] || ['.....', '.....', '..#..', '.....', '.....'], text || 'Blank LED display');
 }
 
+let ledDisplayGeneration = 0;
+let ledActiveRequest = null;
+
+function nextLedGeneration() {
+  ledDisplayGeneration += 1;
+  ledActiveRequest = null;
+  return ledDisplayGeneration;
+}
+
+function characterColumns(character) {
+  const pattern = characterPatterns[character.toUpperCase()] || ['.....', '.....', '.....', '.....', '.....'];
+  return [0, 1, 2, 3, 4].map((column) => pattern.map((row) => row[column] === '#' || row[column] === '1'));
+}
+
+function scrollColumnsForText(text) {
+  const blankColumn = [false, false, false, false, false];
+  const columns = [];
+  [...text].forEach((character, index) => {
+    if (index > 0) columns.push(blankColumn);
+    columns.push(...characterColumns(character));
+  });
+  return columns;
+}
+
+function scrollFramesForText(text) {
+  const blankColumn = [false, false, false, false, false];
+  const padding = Array.from({ length: 5 }, () => blankColumn);
+  const columns = [...padding, ...scrollColumnsForText(text), ...padding];
+  const frames = [];
+  for (let start = 0; start <= columns.length - 5; start++) {
+    const windowColumns = columns.slice(start, start + 5);
+    frames.push([0, 1, 2, 3, 4].map((row) => windowColumns.map((column) => (column[row] ? '#' : '.')).join('')));
+  }
+  return frames;
+}
+
+async function scrollLedText(value) {
+  const text = String(value);
+  const key = `text:${text}`;
+  if (ledActiveRequest && ledActiveRequest.key === key) return ledActiveRequest.promise;
+
+  const generation = nextLedGeneration();
+  const request = { key, generation, promise: null };
+  request.promise = (async () => {
+    if (text.length <= 1) {
+      showLedCharacter(text);
+    } else {
+      for (const frame of scrollFramesForText(text)) {
+        if (generation !== ledDisplayGeneration) return;
+        showLedPattern(frame, `Scrolling: ${text}`);
+        await basic.pause(120);
+      }
+      if (generation === ledDisplayGeneration) showLedPattern(['.....', '.....', '.....', '.....', '.....'], 'Blank LED display');
+    }
+    // Let the next identical call start a fresh loop instead of being treated as a duplicate.
+    if (ledActiveRequest === request) ledActiveRequest = null;
+  })();
+  ledActiveRequest = request;
+  return request.promise;
+}
+
 for (let index = 0; index < 25; index++) {
   const pixel = document.createElement('span');
   pixel.className = 'led-pixel';
@@ -252,22 +326,26 @@ const basic = {
     return loop;
   },
   showNumber(value) {
-    showLedCharacter(value);
+    return scrollLedText(value);
   },
   showString(text) {
-    showLedCharacter(text);
+    return scrollLedText(text);
   },
   showIcon(icon) {
+    nextLedGeneration();
     showLedPattern(ledPatterns[icon] || ledPatterns.Square, `${icon} icon`);
   },
   showArrow(arrow) {
+    nextLedGeneration();
     showLedPattern(ledPatterns[arrow] || ledPatterns.North, `${arrow} arrow`);
   },
   showLeds(leds) {
+    nextLedGeneration();
     const pattern = String(leds).trim().split(/\r?\n/).slice(0, 5).map((row) => row.replace(/\s/g, ''));
     showLedPattern(pattern, 'Custom 5 by 5 LED display');
   },
   clearScreen() {
+    nextLedGeneration();
     showLedPattern(['.....', '.....', '.....', '.....', '.....'], 'Blank LED display');
   }
 };
@@ -292,7 +370,7 @@ function escapeHtml(value) {
 
 function renderCodeHighlight() {
   const keywords = new Set(['let', 'const', 'var', 'if', 'else', 'async', 'await', 'function', 'return', 'true', 'false']);
-  const apis = new Set(['basic', 'bitbot', 'input', 'debug', 'NavigationAlgorithm', 'BBDirection', 'BBRobotDirection', 'BBMotor', 'BBStopMode', 'BBLineSensor', 'BBLightSensor', 'BBColors', 'IconNames', 'ArrowNames']);
+  const apis = new Set(['basic', 'bitbot', 'input', 'debug', 'NavigationAlgorithm', 'BBDirection', 'BBRobotDirection', 'BBMotor', 'BBStopMode', 'BBLineSensor', 'BBPLineSensor', 'BBArcDirection', 'BBLightSensor', 'BBColors', 'IconNames', 'ArrowNames']);
   const tokens = /\/\/[^\n]*|"[^"\n]*"|'[^'\n]*'|\b[A-Za-z_$][\w$]*\b|\b\d+(?:\.\d+)?\b/g;
   let cursor = 0;
   let html = '';
@@ -315,7 +393,9 @@ const input = {
 };
 
 function renderDebug() {
-  debugReadout.value = debugEvents.join('\n');
+  debugReadout.innerHTML = debugEvents
+    .map((entry) => `<span class="${entry.className || ''}">${escapeHtml(entry.text)}</span>`)
+    .join('\n');
   debugReadout.scrollTop = debugReadout.scrollHeight;
 }
 
@@ -340,8 +420,8 @@ function updateCommandHistory() {
   if (label !== lastCommand.label) lastCommand = { label, at: simulationTime };
 }
 
-function recordDebug(message) {
-  debugEvents.push(`${String(Math.round(simulationTime)).padStart(6, ' ')} ms  ${message}`);
+function recordDebug(message, className = '') {
+  debugEvents.push({ text: `${String(Math.round(simulationTime)).padStart(6, ' ')} ms  ${message}`, className });
   debugEvents = debugEvents.slice(-250);
   renderDebug();
 }
@@ -354,7 +434,7 @@ const debug = {
     recordDebug(`${previousState} -> ${state}`);
   },
   log(message) {
-    recordDebug(message);
+    recordDebug(message, 'log-debug');
   }
 };
 
@@ -369,7 +449,11 @@ function logApiCalls(namespace, api) {
     if (typeof implementation !== 'function') return;
     api[name] = function (...args) {
       if (!(namespace === 'input' && name === 'runningTime')) {
-        recordDebug(`${namespace}.${name}(${args.map(formatApiArgument).join(', ')})`);
+        if (namespace === 'basic' && (name === 'showString' || name === 'showNumber')) {
+          recordDebug(String(args[0]), 'log-show-string');
+        } else {
+          recordDebug(`${namespace}.${name}(${args.map(formatApiArgument).join(', ')})`);
+        }
       }
       return implementation.apply(this, args);
     };
@@ -451,15 +535,33 @@ function slideAlongTape(current, next) {
   return { point, contact: nextContact };
 }
 
-function lineSensorValue(sensor) {
+function lineSensorPoint(side) {
   const radians = robot.heading * Math.PI / 180;
   const forward = 11;
-  const side = sensor === BBLineSensor.Left ? -6.5 : 6.5;
-  const sensorPoint = {
+  return {
     x: robot.x + Math.cos(radians) * forward - Math.sin(radians) * side,
     y: robot.y + Math.sin(radians) * forward + Math.cos(radians) * side
   };
-  return distanceToTape(sensorPoint) <= lineSensorReach ? 0 : 1;
+}
+
+function lineSensorValue(sensor) {
+  const side = sensor === BBLineSensor.Left ? -6.5 : 6.5;
+  return distanceToTape(lineSensorPoint(side)) <= lineSensorReach ? 0 : 1;
+}
+
+function proLineSensorSide(sensor) {
+  if (sensor === BBPLineSensor.Left) return -6.5;
+  if (sensor === BBPLineSensor.Right) return 6.5;
+  return 0;
+}
+
+function readLineDigitalValue(sensor) {
+  return distanceToTape(lineSensorPoint(proLineSensorSide(sensor))) <= lineSensorReach;
+}
+
+function readLineAnalogValue(sensor) {
+  const distance = distanceToTape(lineSensorPoint(proLineSensorSide(sensor)));
+  return clamp(Math.round((distance - tapeWidth / 2) * 60), 0, 1023);
 }
 
 function motorSpeed(speed) {
@@ -492,6 +594,40 @@ function sonarDistance(unit) {
   if (unit === BBPingUnit.Inches) return Math.round(distance / 2.54);
   if (unit === BBPingUnit.MicroSeconds) return Math.round(distance * 59);
   return Math.round(distance);
+}
+
+const wheelBaseCm = 11;
+
+// Smaller radius means a tighter (bigger) speed differential between the wheels.
+function arcTurnFactor(radius) {
+  return clamp(wheelBaseCm / (2 * Math.max(Number(radius) || 0, 1)), 0.05, 0.9);
+}
+
+function arcMotorSpeeds(direction, speed, radius) {
+  const safeSpeed = Math.abs(motorSpeed(speed));
+  const diff = arcTurnFactor(radius);
+  const reverse = direction === BBArcDirection.ReverseLeft || direction === BBArcDirection.ReverseRight;
+  const turnLeft = direction === BBArcDirection.ForwardLeft || direction === BBArcDirection.ReverseLeft;
+  const dirSign = reverse ? -1 : 1;
+  const innerSpeed = motorSpeed(dirSign * safeSpeed * (1 - diff));
+  const outerSpeed = motorSpeed(dirSign * safeSpeed * (1 + diff));
+  return turnLeft ? { left: innerSpeed, right: outerSpeed } : { left: outerSpeed, right: innerSpeed };
+}
+
+// Rates approximate the cm/deg-per-ms scale already used by updateMovement.
+function driveDurationMs(distanceCm, speed) {
+  const rate = Math.max(Math.abs(motorSpeed(speed)), 1) * 0.0091;
+  return Math.max(Math.round(Math.abs(Number(distanceCm) || 0) / rate), 0);
+}
+
+function spinDurationMs(angleDeg, speed) {
+  const rate = Math.max(Math.abs(motorSpeed(speed)), 1) * 0.0032;
+  return Math.max(Math.round(Math.abs(Number(angleDeg) || 0) / rate), 0);
+}
+
+function arcDurationMs(angleDeg, speed, radius) {
+  const rate = Math.max(Math.abs(motorSpeed(speed)), 1) * 0.0032 * arcTurnFactor(radius);
+  return Math.max(Math.round(Math.abs(Number(angleDeg) || 0) / rate), 0);
 }
 
 const bitbot = {
@@ -545,6 +681,34 @@ const bitbot = {
     await basic.pause(milliseconds);
     this.stop(BBStopMode.Coast);
   },
+  async gocm(direction, speed, distance) {
+    this.go(direction, speed);
+    await basic.pause(driveDurationMs(distance, speed));
+    this.stop(BBStopMode.Brake);
+  },
+  async spinDeg(direction, speed, angle) {
+    this.rotate(direction, speed);
+    await basic.pause(spinDurationMs(angle, speed));
+    this.stop(BBStopMode.Brake);
+  },
+  arc(direction, speed, radius) {
+    const speeds = arcMotorSpeeds(direction, speed, radius);
+    robot.leftMotor = speeds.left;
+    robot.rightMotor = speeds.right;
+    resumeAfterWallContact();
+  },
+  async arcdeg(direction, speed, radius, angle) {
+    this.arc(direction, speed, radius);
+    await basic.pause(arcDurationMs(angle, speed, radius));
+    this.stop(BBStopMode.Brake);
+  },
+  steer(direction, speed) {
+    const safeSpeed = clamp(Number(speed) || 0, 0, 100);
+    const dir = clamp(Number(direction) || 0, -100, 100);
+    robot.leftMotor = motorSpeed(dir > 0 ? safeSpeed : ((100 + dir) * safeSpeed) / 100);
+    robot.rightMotor = motorSpeed(dir < 0 ? safeSpeed : ((100 - dir) * safeSpeed) / 100);
+    resumeAfterWallContact();
+  },
   stop(mode) {
     robot.leftMotor = 0;
     robot.rightMotor = 0;
@@ -583,6 +747,12 @@ const bitbot = {
   },
   readLine(sensor) {
     return lineSensorValue(sensor);
+  },
+  readLineDigital(sensor) {
+    return readLineDigitalValue(sensor);
+  },
+  readLineAnalog(sensor) {
+    return readLineAnalogValue(sensor);
   },
   readLight(sensor) {
     const offset = sensor === BBLightSensor.Left ? -15 : 15;
@@ -846,10 +1016,10 @@ function setImportStatus(message, isError = false) {
 function unsupportedApiCalls(source) {
   const supportedInputApis = new Set(Object.keys(input));
   const bitbotProApis = new Set([
-    'gocm', 'spinDeg', 'arc', 'arcdeg', 'steer', 'enablePID', 'wheelSensor',
+    'enablePID', 'wheelSensor',
     'turnAngle', 'resetWheelSensors', 'lastEncoderError', 'motorTrim',
     'pidConstants', 'carryForwardErrors', 'clearPidErrors', 'stopThreshold',
-    'setStartPWM', 'readLineAnalog', 'readLineDigital', 'mergeLinePosition',
+    'setStartPWM', 'mergeLinePosition',
     'setThreshold', 'calibrateLine', 'batteryVoltage', 'setVolume',
     'onIREvent', 'irKey', 'lastIRCode', 'irKeyCode'
   ]);
@@ -1025,10 +1195,10 @@ async function runCodeFromEditor() {
     return;
   }
   const script = compileMakeCodeScript(source);
-  const runner = new Function('bitbot', 'basic', 'input', 'debug', 'BBDirection', 'BBRobotDirection', 'BBStopMode', 'BBMotor', 'BBLineSensor', 'BBLightSensor', 'BBPingUnit', 'BBServos', 'BBArms', 'BBMode', 'BBModel', 'BBColors', 'IconNames', 'ArrowNames', `return (async () => { ${script}; return true; })();`);
+  const runner = new Function('bitbot', 'basic', 'input', 'debug', 'BBDirection', 'BBRobotDirection', 'BBStopMode', 'BBMotor', 'BBLineSensor', 'BBPLineSensor', 'BBArcDirection', 'BBLightSensor', 'BBPingUnit', 'BBServos', 'BBArms', 'BBMode', 'BBModel', 'BBColors', 'IconNames', 'ArrowNames', `return (async () => { ${script}; return true; })();`);
 
   try {
-    await runner(bitbot, basic, input, debug, BBDirection, BBRobotDirection, BBStopMode, BBMotor, BBLineSensor, BBLightSensor, BBPingUnit, BBServos, BBArms, BBMode, BBModel, BBColors, IconNames, ArrowNames);
+    await runner(bitbot, basic, input, debug, BBDirection, BBRobotDirection, BBStopMode, BBMotor, BBLineSensor, BBPLineSensor, BBArcDirection, BBLightSensor, BBPingUnit, BBServos, BBArms, BBMode, BBModel, BBColors, IconNames, ArrowNames);
   } catch (error) {
     console.error(error);
     alert(`Script error: ${error.message}`);
@@ -1079,12 +1249,15 @@ function bindControls() {
   document.getElementById('btnCopyDebug').addEventListener('click', async (event) => {
     const copyButton = event.currentTarget;
     try {
-      await navigator.clipboard.writeText(debugReadout.value);
+      await navigator.clipboard.writeText(debugReadout.textContent);
       copyButton.textContent = 'Copied';
       setTimeout(() => { copyButton.textContent = 'Copy'; }, 1500);
     } catch (error) {
-      debugReadout.focus();
-      debugReadout.select();
+      const range = document.createRange();
+      range.selectNodeContents(debugReadout);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
       copyButton.textContent = 'Selected';
       setTimeout(() => { copyButton.textContent = 'Copy'; }, 1500);
     }
